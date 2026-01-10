@@ -1,0 +1,7 @@
+{
+  "name": "MedSearch AI",
+  "description": "A sophisticated medical research platform that synthesizes evidence-based answers directly from PubMed using AI, featuring an interactive evidence matrix, outcome-based summaries, and productivity tools for clinicians.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
