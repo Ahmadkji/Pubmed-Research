@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import EvidenceMatrix from './components/EvidenceMatrix';
 import { Icons } from './constants';
@@ -11,6 +11,7 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     isLoading: false,
     activeTab: 'summary',
+    detailTab: 'overview',
     selectedStudyIds: [],
     isComparingFullPage: false,
     history: ['Effect of Metformin on longevity', 'GLP-1 agonists side effects'],
@@ -58,18 +59,43 @@ const App: React.FC = () => {
   const handleToggleMultiSelect = (id: string) => {
     setState(prev => {
       const isSelected = prev.selectedStudyIds.includes(id);
+      const newSelectedIds = isSelected 
+        ? prev.selectedStudyIds.filter(sid => sid !== id)
+        : [...prev.selectedStudyIds, id];
+      
       return {
         ...prev,
-        selectedStudyIds: isSelected 
-          ? prev.selectedStudyIds.filter(sid => sid !== id)
-          : [...prev.selectedStudyIds, id],
-        selectedStudyId: undefined
+        selectedStudyIds: newSelectedIds,
+        // When checking/unchecking, we clear single focus to avoid confusion,
+        // but the rendering logic will now fallback to the first checkbox if length is 1.
+        selectedStudyId: undefined 
       };
     });
   };
 
-  const selectedStudy = state.currentSearch?.evidenceMatrix.find(s => s.id === state.selectedStudyId);
-  const selectedStudies = state.currentSearch?.evidenceMatrix.filter(s => state.selectedStudyIds.includes(s.id)) || [];
+  const handleSelectStudy = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      selectedStudyId: id,
+      // If the user clicks a specific row, we clear multi-select 
+      // UNLESS they are already in a multi-select workflow.
+      // Standard UX: single click = focus, checkbox = collect.
+      selectedStudyIds: prev.selectedStudyIds.length > 0 ? prev.selectedStudyIds : [],
+      isComparingFullPage: false
+    }));
+  };
+
+  // Derived state for the focused study
+  const effectiveFocusedId = state.selectedStudyId || (state.selectedStudyIds.length === 1 ? state.selectedStudyIds[0] : undefined);
+  const selectedStudy = useMemo(() => 
+    state.currentSearch?.evidenceMatrix.find(s => s.id === effectiveFocusedId),
+    [state.currentSearch, effectiveFocusedId]
+  );
+  
+  const selectedStudies = useMemo(() => 
+    state.currentSearch?.evidenceMatrix.filter(s => state.selectedStudyIds.includes(s.id)) || [],
+    [state.currentSearch, state.selectedStudyIds]
+  );
 
   const getTrendData = () => {
     if (!state.currentSearch) return [];
@@ -80,7 +106,7 @@ const App: React.FC = () => {
     return Object.keys(counts).map(year => ({ year, count: counts[parseInt(year)] })).sort((a,b) => parseInt(a.year) - parseInt(b.year));
   };
 
-  const isDetailOpen = (!!state.selectedStudyId || state.selectedStudyIds.length > 0) && !state.isComparingFullPage;
+  const isDetailOpen = (!!effectiveFocusedId || state.selectedStudyIds.length > 0) && !state.isComparingFullPage;
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] overflow-hidden">
@@ -108,20 +134,6 @@ const App: React.FC = () => {
               placeholder="Search medical evidence..."
               className="w-full pl-12 pr-4 py-2.5 rounded-2xl bg-gray-100 border-none focus:ring-2 focus:ring-[#009688] outline-none transition-all text-sm font-medium"
             />
-            {suggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                {suggestions.map((s, i) => (
-                  <button 
-                    key={i} 
-                    onClick={() => { handleSearch(s); setSuggestions([]); }}
-                    className="w-full px-4 py-3 text-left text-sm hover:bg-blue-50 flex items-center gap-3 transition-colors border-b last:border-b-0"
-                  >
-                    <Icons.TrendingUp />
-                    <span className="truncate">{s}</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
           
           <div className="hidden sm:flex items-center gap-3 ml-auto">
@@ -133,7 +145,7 @@ const App: React.FC = () => {
         </header>
 
         {/* Dashboard Content */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden relative">
           {/* Main Content Area */}
           <section className="flex-1 flex flex-col overflow-hidden relative min-w-[320px] lg:min-w-[600px]">
             
@@ -182,26 +194,14 @@ const App: React.FC = () => {
               </div>
             ) : (
               <div className="flex-1 flex flex-col overflow-y-auto p-4 lg:p-8 custom-scrollbar min-w-0">
-                {!state.currentSearch && !state.isLoading && (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md mx-auto py-12">
-                    <div className="w-20 h-20 rounded-3xl bg-blue-50 flex items-center justify-center text-[#009688] mb-6 shadow-sm border border-blue-100">
-                      <Icons.Search />
-                    </div>
-                    <h2 className="text-2xl font-bold text-[#004d73] mb-2">Evidence-First Medical Search</h2>
-                    <p className="text-gray-500 mb-8 leading-relaxed">Search across millions of peer-reviewed articles.</p>
-                  </div>
-                )}
-
-                {state.isLoading && (
+                {state.isLoading ? (
                   <div className="flex-1 flex flex-col items-center justify-center gap-4 py-20">
                     <div className="w-64 h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-full bg-[#009688] animate-[loading_1.5s_infinite]" style={{ width: '40%' }}></div>
                     </div>
                     <p className="text-sm font-medium text-gray-500 animate-pulse">Querying PubMed & synthesizing evidence...</p>
                   </div>
-                )}
-
-                {state.currentSearch && !state.isLoading && (
+                ) : state.currentSearch ? (
                   <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="bg-white rounded-2xl p-6 lg:p-8 border border-gray-100 shadow-sm relative overflow-hidden group">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-teal-50 rounded-bl-full -mr-16 -mt-16 transition-all group-hover:scale-110" />
@@ -214,149 +214,203 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <div id="evidence-matrix">
+                    <div id="evidence-matrix" className="relative">
+                      {/* Selection Banner - Show if items are selected OR if single focus exists */}
+                      {state.selectedStudyIds.length > 0 && (
+                        <div className="sticky top-0 z-20 mb-4 animate-in slide-in-from-top-4 duration-300">
+                          <div className="bg-[#004d73] text-white px-6 py-3 rounded-2xl shadow-xl flex items-center justify-between border border-white/10">
+                            <div className="flex items-center gap-4">
+                              <div className="w-8 h-8 rounded-full bg-[#009688] flex items-center justify-center font-bold text-sm shadow-inner">
+                                {state.selectedStudyIds.length}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold">Comparison Mode Active</p>
+                                <p className="text-[10px] text-blue-200 uppercase tracking-widest font-medium">Select more to compare or launch full analysis</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <button 
+                                onClick={() => setState(p => ({...p, selectedStudyIds: []}))}
+                                className="text-xs font-bold text-blue-200 hover:text-white transition-colors"
+                              >
+                                Clear
+                              </button>
+                              {state.selectedStudyIds.length > 1 && (
+                                <button 
+                                  onClick={() => setState(p => ({...p, isComparingFullPage: true}))}
+                                  className="px-4 py-2 bg-[#009688] hover:bg-[#00796b] text-white text-xs font-bold rounded-xl shadow-lg flex items-center gap-2 transition-all active:scale-95"
+                                >
+                                  <Icons.Matrix /> Launch Full Analysis
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
                         <h3 className="text-lg font-bold text-[#004d73]">Evidence Matrix</h3>
-                        <div className="flex gap-2">
-                          {state.selectedStudyIds.length >= 2 && (
-                            <button 
-                              onClick={() => setState(p => ({...p, isComparingFullPage: true}))}
-                              className="px-4 py-2 bg-[#009688] text-white text-xs font-bold rounded-lg shadow-lg hover:shadow-teal-100"
-                            >
-                              <Icons.Matrix /> View Comparison ({state.selectedStudyIds.length})
-                            </button>
-                          )}
-                        </div>
                       </div>
                       <EvidenceMatrix 
                         studies={state.currentSearch.evidenceMatrix} 
-                        selectedStudyId={state.selectedStudyId}
+                        selectedStudyId={effectiveFocusedId}
                         selectedStudyIds={state.selectedStudyIds}
-                        onSelectStudy={(id) => setState(p => ({...p, selectedStudyId: id, selectedStudyIds: [], isComparingFullPage: false}))} 
+                        onSelectStudy={handleSelectStudy} 
                         onToggleMultiSelect={handleToggleMultiSelect}
                       />
                     </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md mx-auto py-12">
+                    <div className="w-20 h-20 rounded-3xl bg-blue-50 flex items-center justify-center text-[#009688] mb-6 shadow-sm border border-blue-100">
+                      <Icons.Search />
+                    </div>
+                    <h2 className="text-2xl font-bold text-[#004d73] mb-2">Evidence-First Medical Search</h2>
+                    <p className="text-gray-500 mb-8 leading-relaxed">Search across millions of peer-reviewed articles.</p>
                   </div>
                 )}
               </div>
             )}
           </section>
 
-          {/* Background Overlay for Detail Drawer on medium screens */}
-          {isDetailOpen && (
-            <div 
-              className="absolute inset-0 bg-black/5 backdrop-blur-[2px] z-20 lg:hidden animate-in fade-in duration-300" 
-              onClick={() => setState(p => ({...p, selectedStudyId: undefined, selectedStudyIds: []}))}
-            />
-          )}
-
-          {/* Right Detail Panel - Enhanced for Responsive Behavior */}
+          {/* Right Detail Panel */}
           {!state.isComparingFullPage && (
             <aside className={`
-              fixed lg:static top-0 right-0 h-full bg-white flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
-              shadow-[-20px_0_40px_rgba(0,0,0,0.05)] lg:shadow-none flex-shrink-0 z-30
-              ${isDetailOpen 
-                ? (state.selectedStudyIds.length > 1 ? 'w-full sm:w-[520px] lg:w-[480px]' : 'w-full sm:w-[420px] lg:w-[400px]') 
-                : 'w-0 opacity-0 pointer-events-none translate-x-12'
-              }
+              flex-shrink-0 transition-all duration-500 ease-in-out border-l bg-white flex flex-col z-30
+              ${isDetailOpen ? 'w-96 lg:w-[480px]' : 'w-0 opacity-0 overflow-hidden'}
             `}>
-              <div className="flex flex-col h-full min-w-[320px] overflow-hidden border-l border-gray-100">
-                <header className="px-6 h-16 border-b flex items-center justify-between flex-shrink-0 bg-white sticky top-0 z-20">
-                  <h3 className="font-bold text-[#004d73] flex items-center gap-2 truncate pr-4">
-                    {state.selectedStudyIds.length > 1 ? (
-                      <><Icons.Matrix /> Selection ({state.selectedStudyIds.length})</>
-                    ) : (
-                      <span className="truncate">{selectedStudy?.title || 'Study Details'}</span>
-                    )}
-                  </h3>
+              <div className="flex flex-col h-full w-96 lg:w-[480px] overflow-hidden">
+                <header className="px-6 h-16 border-b flex items-center justify-between bg-white sticky top-0 z-20">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <h3 className="font-bold text-[#004d73] truncate">
+                      {state.selectedStudyIds.length > 1 ? (
+                        <span className="flex items-center gap-2"><Icons.Matrix /> Comparison Mode</span>
+                      ) : (
+                        'Study Inspector'
+                      )}
+                    </h3>
+                  </div>
                   <button 
                     onClick={() => setState(p => ({...p, selectedStudyId: undefined, selectedStudyIds: []}))} 
-                    className="flex-shrink-0 p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 shadow-sm"
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
                   >
                     <Icons.ChevronRight />
                   </button>
                 </header>
-                
-                <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
                   {state.selectedStudyIds.length > 1 ? (
-                    <div className="flex flex-col p-6 gap-6">
-                      <div className="p-5 bg-teal-50 rounded-2xl border border-teal-100 flex items-center justify-between shadow-sm">
-                        <span className="text-sm font-bold text-[#004d73]">{state.selectedStudyIds.length} Selected</span>
-                        <button 
-                          onClick={() => setState(p => ({...p, isComparingFullPage: true}))}
-                          className="px-4 py-2 bg-[#009688] text-white text-xs font-bold rounded-lg shadow-md"
-                        >
-                          Full Page
-                        </button>
+                    <div className="flex flex-col h-full overflow-hidden animate-in fade-in duration-300">
+                      <div className="p-6 bg-gray-50/50 border-b space-y-3">
+                        <p className="text-xs font-semibold text-gray-500">Comparing PICO factors across {state.selectedStudyIds.length} records.</p>
                       </div>
-                      <div className="flex flex-col divide-y divide-gray-100">
-                        {selectedStudies.map((study, idx) => (
-                          <div key={study.id} className="py-6 first:pt-0 group cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded-xl transition-colors">
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase mb-2 inline-block tracking-widest">
-                              #{idx + 1} — {study.type}
-                            </span>
-                            <h4 className="text-sm font-bold leading-snug mb-2 text-gray-800 line-clamp-2">{study.title}</h4>
-                            <button 
-                              onClick={() => setState(p => ({...p, selectedStudyId: study.id, selectedStudyIds: []}))}
-                              className="text-[#009688] text-xs font-bold flex items-center gap-1 hover:underline"
-                            >
-                              Individual Details <Icons.ChevronRight />
-                            </button>
-                          </div>
-                        ))}
+                      <div className="flex-1 overflow-x-auto custom-scrollbar">
+                         <div className="flex p-6 gap-4 min-w-max">
+                            {selectedStudies.map((study, idx) => (
+                              <div key={study.id} className="w-72 flex-shrink-0 flex flex-col gap-6 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:border-[#009688] transition-all relative group">
+                                <div className="absolute top-4 right-4">
+                                  <button onClick={() => handleToggleMultiSelect(study.id)} className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"><Icons.Check /></button>
+                                </div>
+                                <div>
+                                  <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[9px] font-bold uppercase tracking-widest mb-2 inline-block">
+                                    {study.type} • {study.year}
+                                  </span>
+                                  <h4 className="text-sm font-bold leading-tight text-[#004d73] line-clamp-2">{study.title}</h4>
+                                </div>
+                                <div className="space-y-4">
+                                   <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                      <p className="text-[9px] text-[#009688] font-bold uppercase tracking-widest mb-1">Population</p>
+                                      <p className="text-xs text-gray-700 leading-relaxed line-clamp-3">{study.population}</p>
+                                   </div>
+                                   <div className="p-3 bg-blue-50/20 rounded-xl border border-blue-50">
+                                      <p className="text-[9px] text-[#004d73] font-bold uppercase tracking-widest mb-1">Intervention</p>
+                                      <p className="text-xs text-gray-800 font-semibold leading-relaxed line-clamp-3">{study.intervention}</p>
+                                   </div>
+                                </div>
+                                <div className="mt-auto pt-4 border-t flex items-center justify-between">
+                                  <span className="text-[9px] font-bold text-teal-600">GRADE: {study.grade}</span>
+                                  <button onClick={() => handleSelectStudy(study.id)} className="text-[10px] font-bold text-[#009688] hover:underline">Inspect →</button>
+                                </div>
+                              </div>
+                            ))}
+                         </div>
                       </div>
                     </div>
                   ) : selectedStudy ? (
-                    <div className="p-6 space-y-6">
-                      <div className="animate-in fade-in duration-300">
-                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase mb-2 inline-block tracking-widest">
-                          {selectedStudy.type}
-                        </span>
-                        <h4 className="text-lg font-bold leading-snug mb-2 text-[#004d73]">{selectedStudy.title}</h4>
-                        <p className="text-sm text-gray-500 leading-relaxed font-medium">{selectedStudy.authors} — <span className="italic">{selectedStudy.journal} ({selectedStudy.year})</span></p>
+                    <div className="p-6">
+                      {/* Tabs */}
+                      <div className="flex border-b bg-gray-50/50 p-1 mb-6 rounded-xl">
+                        {['overview', 'abstract', 'outcomes'].map(tab => (
+                          <button
+                            key={tab}
+                            onClick={() => setState(p => ({...p, detailTab: tab as any}))}
+                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all ${
+                              state.detailTab === tab ? 'bg-white text-[#004d73] shadow-sm' : 'text-gray-400'
+                            }`}
+                          >
+                            {tab}
+                          </button>
+                        ))}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm">
-                          <p className="text-[10px] text-gray-400 font-bold uppercase mb-1 tracking-widest">Grade</p>
-                          <p className={`text-sm font-bold ${selectedStudy.grade === 'STRONG' ? 'text-teal-600' : 'text-amber-600'}`}>{selectedStudy.grade}</p>
+                      {state.detailTab === 'overview' && (
+                        <div className="space-y-6 animate-in fade-in duration-300">
+                          <div>
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[9px] font-bold uppercase tracking-widest mb-2 inline-block">{selectedStudy.type}</span>
+                            <h4 className="text-lg font-bold leading-tight text-[#004d73] mb-2">{selectedStudy.title}</h4>
+                            <p className="text-xs text-gray-500 font-medium">{selectedStudy.authors} — <span className="italic">{selectedStudy.journal} ({selectedStudy.year})</span></p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Evidence Grade</p>
+                              <p className={`text-xs font-bold ${selectedStudy.grade === 'STRONG' ? 'text-teal-600' : 'text-amber-600'}`}>{selectedStudy.grade}</p>
+                            </div>
+                            <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">Risk of Bias</p>
+                              <p className="text-xs font-bold text-gray-700">{selectedStudy.riskOfBias}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                              <h5 className="text-[9px] font-bold text-[#009688] uppercase tracking-widest mb-2">Population</h5>
+                              <p className="text-sm text-gray-700 font-medium leading-relaxed">{selectedStudy.population}</p>
+                            </div>
+                            <div className="bg-blue-50/20 p-4 rounded-xl border border-blue-50">
+                              <h5 className="text-[9px] font-bold text-[#004d73] uppercase tracking-widest mb-2">Intervention</h5>
+                              <p className="text-sm text-gray-800 font-semibold leading-relaxed">{selectedStudy.intervention}</p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm">
-                          <p className="text-[10px] text-gray-400 font-bold uppercase mb-1 tracking-widest">Risk</p>
-                          <p className="text-sm font-bold text-gray-700">{selectedStudy.riskOfBias}</p>
-                        </div>
-                      </div>
+                      )}
 
-                      <div className="space-y-6">
-                        <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 shadow-inner">
-                          <h5 className="text-[10px] font-bold text-[#004d73] uppercase tracking-widest mb-2 opacity-60">Population</h5>
-                          <p className="text-sm text-gray-700 font-medium leading-relaxed">{selectedStudy.population}</p>
+                      {state.detailTab === 'abstract' && (
+                        <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                           <h5 className="text-[10px] font-bold text-[#004d73] uppercase tracking-widest mb-4 border-b pb-2">PubMed Abstract</h5>
+                           <p className="text-sm text-gray-600 leading-relaxed italic border-l-4 border-teal-100 pl-4 py-2 bg-gray-50/30 rounded-r-xl">"...{selectedStudy.abstractSnippet}..."</p>
                         </div>
-                        <div className="bg-blue-50/30 p-4 rounded-xl border border-blue-100 shadow-inner">
-                          <h5 className="text-[10px] font-bold text-[#004d73] uppercase tracking-widest mb-2 opacity-60">Intervention</h5>
-                          <p className="text-sm text-gray-800 font-semibold leading-relaxed">{selectedStudy.intervention}</p>
+                      )}
+
+                      {state.detailTab === 'outcomes' && (
+                        <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-4">
+                          <h5 className="text-[10px] font-bold text-[#004d73] uppercase tracking-widest mb-4 border-b pb-2">Primary Outcomes</h5>
+                          <div className="bg-white border-2 border-teal-50 p-4 rounded-xl shadow-sm">
+                            <p className="text-sm text-gray-900 font-bold mb-2">Clinical Results</p>
+                            <p className="text-sm text-gray-700 leading-relaxed">{selectedStudy.outcome}</p>
+                          </div>
                         </div>
-                        <div className="pt-2">
-                          <h5 className="text-[10px] font-bold text-[#004d73] uppercase tracking-widest mb-3 opacity-60">Study Abstract</h5>
-                          <p className="text-sm text-gray-600 italic leading-relaxed border-l-4 border-teal-100 pl-4 py-1">"...{selectedStudy.abstractSnippet}..."</p>
-                        </div>
-                      </div>
-                      
-                      <div className="pt-8 border-t flex flex-col gap-3 pb-12">
-                        <a 
-                          href={selectedStudy.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#004d73] text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95"
-                        >
-                          View on PubMed <Icons.ChevronRight />
-                        </a>
-                        <button className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-gray-100 text-[#004d73] rounded-xl font-bold text-sm hover:bg-gray-50 transition-all active:scale-95">
-                          <Icons.Bookmark /> Save to Project
-                        </button>
+                      )}
+
+                      <div className="mt-8 pt-6 border-t space-y-3">
+                        <a href={selectedStudy.url} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 py-3 bg-[#004d73] text-white rounded-xl font-bold text-xs shadow-md">View PubMed Record <Icons.ChevronRight /></a>
                       </div>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center p-12 text-center">
+                      <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 mb-4 border border-gray-100"><Icons.Matrix /></div>
+                      <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">No Selection</h4>
+                      <p className="text-xs text-gray-400 leading-relaxed">Select a study from the evidence matrix to inspect clinical details, outcomes, and risk of bias.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </aside>
@@ -364,24 +418,13 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <button 
-        className="fixed bottom-6 right-6 sm:hidden w-14 h-14 bg-[#009688] text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-50"
-        onClick={() => { setQuery(''); setState(p => ({...p, selectedStudyId: undefined, selectedStudyIds: [], isComparingFullPage: false})) }}
-      >
-        <Icons.Search />
-      </button>
-      
       <style>{`
         @keyframes loading {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(250%); }
         }
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
       `}</style>
     </div>
   );

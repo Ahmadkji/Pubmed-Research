@@ -50,6 +50,7 @@ export interface AppState {
   currentSearch?: SearchResult;
   isLoading: boolean;
   activeTab: 'summary' | 'matrix' | 'abstracts' | 'insights';
+  detailTab: 'overview' | 'abstract' | 'outcomes';
   selectedStudyId?: string;
   selectedStudyIds: string[]; // For multi-study comparison
   isComparingFullPage: boolean; // Toggle full-page comparison view

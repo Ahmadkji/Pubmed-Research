@@ -49,11 +49,11 @@ const EvidenceMatrix: React.FC<EvidenceMatrixProps> = ({
   };
 
   return (
-    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm custom-scrollbar">
-      <table className="min-w-full divide-y divide-gray-200 table-auto">
-        <thead className="bg-gray-50">
+    <div className="w-full overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm custom-scrollbar relative">
+      <table className="min-w-full divide-y divide-gray-200 table-auto border-separate border-spacing-0">
+        <thead className="bg-gray-50 sticky top-0 z-10">
           <tr>
-            <th className="px-4 py-4 text-left w-10">
+            <th className="px-4 py-4 text-left w-10 border-b">
               <span className="sr-only">Select</span>
             </th>
             {['Year', 'Study Type', 'Population', 'Outcome', 'Grade'].map((header) => {
@@ -62,7 +62,7 @@ const EvidenceMatrix: React.FC<EvidenceMatrixProps> = ({
                 <th 
                   key={header}
                   onClick={() => handleSort(key)}
-                  className="px-4 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap"
+                  className="px-4 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap border-b"
                 >
                   <div className="flex items-center gap-1.5">
                     {header}
@@ -83,9 +83,14 @@ const EvidenceMatrix: React.FC<EvidenceMatrixProps> = ({
             return (
               <tr 
                 key={study.id} 
-                className={`transition-all group ${
-                  isSingleSelected ? 'bg-teal-50/50 shadow-inner' : isMultiSelected ? 'bg-blue-50/30' : 'hover:bg-gray-50/80'
+                className={`transition-all group relative cursor-pointer ${
+                  isSingleSelected 
+                    ? 'bg-teal-50/50 shadow-[inset_4px_0_0_0_#009688]' 
+                    : isMultiSelected 
+                      ? 'bg-blue-50/40 shadow-[inset_4px_0_0_0_#3b82f6]' 
+                      : 'hover:bg-gray-50/80'
                 }`}
+                onClick={() => onSelectStudy(study.id)}
               >
                 <td className="px-4 py-4 whitespace-nowrap">
                   <input 
@@ -98,35 +103,22 @@ const EvidenceMatrix: React.FC<EvidenceMatrixProps> = ({
                     className="w-4 h-4 rounded border-gray-300 text-[#009688] focus:ring-[#009688] cursor-pointer accent-[#009688]"
                   />
                 </td>
-                <td 
-                  className="px-4 py-4 whitespace-nowrap text-xs font-mono font-bold text-gray-900 cursor-pointer"
-                  onClick={() => onSelectStudy(study.id)}
-                >
+                <td className="px-4 py-4 whitespace-nowrap text-xs font-mono font-bold text-gray-900">
                   {study.year}
                 </td>
-                <td 
-                  className="px-4 py-4 whitespace-nowrap text-xs text-gray-600 cursor-pointer"
-                  onClick={() => onSelectStudy(study.id)}
-                >
-                  <span className="px-2 py-1 rounded bg-gray-100 text-[9px] font-bold uppercase group-hover:bg-gray-200 transition-colors tracking-tighter">{study.type}</span>
+                <td className="px-4 py-4 whitespace-nowrap text-xs text-gray-600">
+                  <span className="px-2 py-1 rounded bg-gray-100 text-[9px] font-bold uppercase group-hover:bg-gray-200 transition-colors tracking-tighter">
+                    {study.type}
+                  </span>
                 </td>
-                <td 
-                  className="px-4 py-4 text-xs text-gray-600 max-w-[150px] lg:max-w-xs truncate cursor-pointer font-medium"
-                  onClick={() => onSelectStudy(study.id)}
-                >
+                <td className="px-4 py-4 text-xs text-gray-600 max-w-[180px] lg:max-w-xs truncate font-medium">
                   {study.population}
                 </td>
-                <td 
-                  className="px-4 py-4 text-xs font-bold text-gray-900 max-w-[150px] lg:max-w-xs truncate cursor-pointer"
-                  onClick={() => onSelectStudy(study.id)}
-                >
+                <td className="px-4 py-4 text-xs font-bold text-gray-900 max-w-[180px] lg:max-w-xs truncate">
                   {study.outcome}
                 </td>
-                <td 
-                  className="px-4 py-4 whitespace-nowrap cursor-pointer"
-                  onClick={() => onSelectStudy(study.id)}
-                >
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getGradeColor(study.grade)}`}>
+                <td className="px-4 py-4 whitespace-nowrap">
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-colors ${getGradeColor(study.grade)}`}>
                     {study.grade}
                   </span>
                 </td>
