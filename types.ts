@@ -51,6 +51,8 @@ export interface AppState {
   isLoading: boolean;
   activeTab: 'summary' | 'matrix' | 'abstracts' | 'insights';
   selectedStudyId?: string;
+  selectedStudyIds: string[]; // For multi-study comparison
+  isComparingFullPage: boolean; // Toggle full-page comparison view
   history: string[];
   isSidebarOpen: boolean;
 }
